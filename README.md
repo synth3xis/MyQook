@@ -1,4 +1,5 @@
-# MyQook
+ShopCook
+
 Shopping list and cook book all in one place
 
 You can:
