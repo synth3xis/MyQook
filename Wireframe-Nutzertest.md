@@ -23,7 +23,7 @@ Statement zu den 4 Punkten:
 -Verbesserungen?:
 		>Rezeptsuche sollte eingefügt werden.
 		>Eine Einkaufsliste automatisch anhand eines Rezeptes erstellen  
-		>Filtermöglichkeit von Vegetarisch (kein Fleisch), Vegan (keine Tierprodukte), Peschetarisch (Fischgericht) hinzufügen.
+		>Filtermöglichkeit von Vegetarisch (kein Fleisch), Vegan (keine Tierprodukte), Pescetarisch (Fischgericht) hinzufügen.
 
 Probleme Verbesserungen?
 Hier einige Gedanken Meinerseits: 
