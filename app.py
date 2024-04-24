@@ -36,7 +36,7 @@ def main():
     items = []
 
     # Texteingabefeld für Benutzer, um Elemente hinzuzufügen
-    new_item = st.text_input("Neues Element hinzufügen:")
+    new_item = st.text_input("add new element")
     
     # Button zum Hinzufügen des Elements zur Liste
     if st.button(""):
