@@ -29,7 +29,7 @@ def init_dataframe():
         st.session_state.df = pd.DataFrame(columns=DATA_COLUMNS)
 
 def main():
-   st.header("MYQook", anchor=None, *, help=None, divider="grey")
+   
     st.title("Add new list")
 
     # Initialisiere eine leere Liste
@@ -39,12 +39,12 @@ def main():
     new_item = st.text_input("Neues Element hinzufügen:")
     
     # Button zum Hinzufügen des Elements zur Liste
-    if st.button("Hinzufügen"):
+    if st.button(""):
         if new_item != "":
             items.append(new_item)
-            st.success(f"'{new_item}' wurde zur Liste hinzugefügt!")
+            st.success(f"'{new_item}' has been successfully added!")
         else:
-            st.warning("Bitte gib einen Namen für das Element ein.")
+            st.warning("something went wrong qwq.")
 
     # Zeige die Liste der Elemente an
     if len(items) > 0:
@@ -52,7 +52,7 @@ def main():
         for idx, item in enumerate(items, start=1):
             st.write(f"{idx}. {item}")
     else:
-        st.write("Die Liste ist leer.")
+        st.write("list is empty")
 
     
 if __name__ == "__main__":
