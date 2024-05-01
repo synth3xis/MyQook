@@ -54,7 +54,7 @@ def get_recipes(ingredients, allergens=[], diet=[], count=5):
     return filtered_recipes
 
 # Streamlit app layout
-st.title("Recipe Generator Based on Ingredients")
+st.title("MyQook")
 
 # Initialize session state for lists
 if 'lists' not in st.session_state:
