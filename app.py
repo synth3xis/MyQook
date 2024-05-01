@@ -1,82 +1,154 @@
 import streamlit as st
 import requests
-import random
+import toml
+import os
+
+# Get absolute path to the directory where this script resides
+current_dir = os.path.dirname(os.path.abspath(__file__))
+secrets_path = os.path.join(current_dir, ".streamlit/secrets.toml")
+
+# Load secrets from secrets.toml
+secrets = toml.load(secrets_path)
+edamam_credentials = secrets.get("edamam", {})
+app_id = edamam_credentials.get("app_id", "")
+app_key = edamam_credentials.get("app_key", "")
+
+# Function to filter recipes based on allergens and diet types
+def filter_recipes(recipes, allergens=[], diet=[]):
+    filtered_recipes = []
+    for recipe in recipes:
+        include_recipe = True
+        if allergens:
+            for allergen in allergens:
+                if allergen.lower() in [a.lower() for a in recipe.get('healthLabels', [])]:
+                    include_recipe = False
+                    break
+        if diet:
+            for diet_type in diet:
+                if diet_type.lower() not in [d.lower() for d in recipe.get('dietLabels', [])]:
+                    include_recipe = False
+                    break
+        if include_recipe:
+            filtered_recipes.append(recipe)
+    return filtered_recipes
 
 # Function to get recipes from Edamam API
-def get_recipes(ingredients, count=5):
-    app_id = "5fd0dac0"
-    app_key = "334eca2560aea27a4839d48cde7aeb12"
-    url = f"https://api.edamam.com/search?q={'+'.join(ingredients)}&app_id={app_id}&app_key={app_key}&to={count}"
-
+def get_recipes(ingredients, allergens=[], diet=[], count=5):
+    allergen_query = f"&health={','.join(allergens)}" if allergens else ""
+    diet_query = f"&diet={','.join(diet)}" if diet else ""
+    url = f"https://api.edamam.com/search?q={'+'.join(ingredients)}&app_id={app_id}&app_key={app_key}&to={count}{allergen_query}{diet_query}"
     response = requests.get(url)
     data = response.json()
-
+    
     recipes = []
     if 'hits' in data:
         hits = data['hits']
         for hit in hits:
-            recipes.append(hit['recipe'])
+            recipe = hit['recipe']
+            if 'ingredientLines' in recipe:
+                recipes.append(recipe)
     
-    return recipes
+    # Filter recipes based on allergens and diet types
+    filtered_recipes = filter_recipes(recipes, allergens, diet)
+    
+    return filtered_recipes
 
 # Streamlit app layout
 st.title("Recipe Generator Based on Ingredients")
 
-# Initialize session state to store multiple lists
+# Initialize session state for lists
 if 'lists' not in st.session_state:
-    st.session_state.lists = {"List 1": []}
+    st.session_state.lists = {}
 
-# Select or create a new list
-list_name = st.selectbox("Select or create a new list:", list(st.session_state.lists.keys()))
+# Sidebar for allergen filters
+st.sidebar.title("Allergen Filters")
+allergen_filter = st.sidebar.multiselect(
+    "Select allergens:",
+    [
+        "Dairy-Free",
+        "Egg-Free",
+        "Gluten-Free",
+        "Peanut-Free",
+        "Seafood-Free",
+        "Sesame-Free",
+        "Soy-Free",
+        "Sulfite-Free",
+        "Tree-Nut-Free",
+        "Wheat-Free",
+    ],
+)
 
-# Add list button
-if st.button("Add List"):
-    new_list_name = st.text_input("Enter name for new list:")
+# Sidebar for diet filters
+st.sidebar.title("Diet Filters")
+diet_filter = st.sidebar.multiselect("Select diet types:", ["Balanced", "High-Protein", "Low-Carb", "Low-Fat", "Paleo", "Vegan", "Vegetarian"])
+
+# Button to add a new list
+new_list_name = st.text_input("Enter name for new list:")
+if st.button("Add New List"):
     if new_list_name:
         st.session_state.lists[new_list_name] = []
 
-# Input ingredients for the selected list
-ingredients_input = st.text_input("Enter ingredients separated by commas (e.g., chicken, pasta, tomato):")
-ingredients_list = [ingredient.strip() for ingredient in ingredients_input.split(",")]
+# Multiselect widget to select or add lists
+selected_list_name = st.sidebar.selectbox("Select a list:", [""] + list(st.session_state.lists.keys()))
+if selected_list_name:
+    ingredient_input_key = f"ingredient_input_{selected_list_name}"
+    ingredient_input = st.text_input("Add ingredient:", key=ingredient_input_key)
+    if ingredient_input:
+        if st.button("Add Ingredient"):
+            if selected_list_name not in st.session_state.lists:
+                st.session_state.lists[selected_list_name] = []
+            st.session_state.lists[selected_list_name].append(ingredient_input)
 
-# Add ingredients to the selected list
-if st.button("Add Ingredients"):
-    st.session_state.lists[list_name].extend(ingredients_list)
+# Display items in the selected list
+if selected_list_name and selected_list_name in st.session_state.lists:
+    st.write(f"# {selected_list_name}")
+    for i, item in enumerate(st.session_state.lists[selected_list_name]):
+        ingredient_key = f"ingredient_{selected_list_name}_{i}"
+        if st.button(f"Remove {item}", key=ingredient_key):
+            st.session_state.lists[selected_list_name].remove(item)
+            break  # Exit loop after removing the item
+    for item in st.session_state.lists[selected_list_name]:
+        st.write(f"- {item}")
 
-# Remove ingredients from the selected list
-if st.button("Remove Ingredients"):
-    remove_ingredient = st.text_input("Enter ingredients to remove separated by commas:")
-    remove_ingredients = [ingredient.strip() for ingredient in remove_ingredient.split(",")]
-    for ingredient in remove_ingredients:
-        if ingredient in st.session_state.lists[list_name]:
-            st.session_state.lists[list_name].remove(ingredient)
+# Display created lists in the sidebar
+st.sidebar.title("My Lists")
+for list_name, ingredients in st.session_state.lists.items():
+    expander = st.sidebar.expander(list_name)
+    for ingredient in ingredients:
+        expander.write(f"- {ingredient}")
 
-# Generate recipes for the selected list
-if st.button("Generate Recipes"):
-    recipes = get_recipes(st.session_state.lists[list_name])
-    if recipes:
-        st.subheader("Here are some recipe suggestions:")
-        for recipe in recipes:
-            st.subheader(recipe['label'])
-            st.image(recipe['image'])
+# Generate recipes with filter options
+generate_button_clicked = st.button("Generate Recipes")
+if generate_button_clicked:
+    # Clear previous recipe display
+    st.empty()
 
-            st.subheader("Info:")
-            info = f"Yield: {recipe['yield']}\n"
-            if 'calories' in recipe['totalNutrients']:
-                info += f"Calories per Serving: {recipe['totalNutrients']['calories']['quantity']} {recipe['totalNutrients']['calories']['unit']}\n"
-            if 'totalTime' in recipe:
-                info += f"Cooking Time: {recipe['totalTime']} minutes\n"
-            st.write(info)
+    if selected_list_name in st.session_state.lists:
+        ingredients_list = st.session_state.lists[selected_list_name]
+        recipes = get_recipes(ingredients_list, allergen_filter, diet_filter)
+        if recipes:
+            st.markdown("### Recipes")  # Add header for recipes
+            for i, recipe in enumerate(recipes):
+                with st.expander(f"Recipe {i+1}: {recipe['label']}"):
+                    st.image(recipe['image'])
 
-            st.subheader("Ingredients:")
-            for ingredient in recipe['ingredientLines']:
-                st.write("- " + ingredient)
+                    st.subheader("Ingredients:")
+                    for ingredient in recipe['ingredientLines']:
+                        st.write("- " + ingredient)
 
-            st.subheader("Full Recipe:")
-            st.write(recipe['url'])
-            st.write("---")
-    else:
-        st.write("No recipes found with these ingredients.")
+                    if 'preparation' in recipe:
+                        st.subheader("Preparation Steps:")
+                        for i, step in enumerate(recipe['preparation']):
+                            st.write(f"{i + 1}. {step}")
+
+                    st.subheader("Full Recipe:")
+                    st.write(recipe['url'])
+                    st.write("---")
+
+
+
+
+
 
 
 
