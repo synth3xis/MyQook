@@ -4,8 +4,10 @@ import toml
 import os
 
 # Get absolute path to the directory where this script resides
+
 current_dir = os.path.dirname(os.path.abspath(__file__))
-secrets_path = os.path.join(current_dir, ".streamlit/secrets.toml")
+secrets_path = os.path.join(current_dir, "secrets.toml")
+
 
 # Load secrets from secrets.toml
 secrets = toml.load(secrets_path)
