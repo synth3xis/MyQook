@@ -33,7 +33,7 @@ def filter_recipes(recipes, allergens=[], diet=[]):
     return filtered_recipes
 
 # Function to get recipes from Edamam API
-def get_recipes(ingredients, allergens=[], diet=[], count=5):
+def get_recipes(ingredients, allergens=[], diet=[], count=10):
     allergen_query = f"&health={','.join(allergens)}" if allergens else ""
     diet_query = f"&diet={','.join(diet)}" if diet else ""
     url = f"https://api.edamam.com/search?q={'+'.join(ingredients)}&app_id={app_id}&app_key={app_key}&to={count}{allergen_query}{diet_query}"
@@ -55,6 +55,26 @@ def get_recipes(ingredients, allergens=[], diet=[], count=5):
 
 # Streamlit app layout
 st.title("MyQook")
+
+# Sidebar for instructions
+with st.sidebar.expander("How to Use"):
+    st.markdown("""
+    
+    
+    1. **Add a list**: Type in the name of the list in the "Enter name for new list" text box, then click on the "Add New List" button.
+
+    2. **Choose List**: After you created your list, choose your list in the dropdown menu.
+
+    3. **Add Ingredients**: you can add your Ingredients in the "Add ingredients" box. Click on "Add ingredient" to add an Ingredient to the list.
+
+    4. **Generate Recipes**: Click on "Generate recipe" to generate Recipes based on the ingredients on the selected List currently chosen.
+
+    5. **Remove Lists or ingredients**: To remove a list or ingredient , click on the "Delete" button next to the list name in the "My Lists" section.
+
+    IMPORTANT: This App is still in development, some aspects (e.g filter options) might not function properly. 
+
+    supported language is **english only**
+    """)
 
 # Initialize session state for lists
 if 'lists' not in st.session_state:
@@ -112,10 +132,18 @@ if selected_list_name and selected_list_name in st.session_state.lists:
 
 # Display created lists in the sidebar
 st.sidebar.title("My Lists")
+lists_to_delete = []
 for list_name, ingredients in st.session_state.lists.items():
     expander = st.sidebar.expander(list_name)
     for ingredient in ingredients:
         expander.write(f"- {ingredient}")
+    delete_list = expander.button(f"Delete {list_name}")
+    if delete_list:
+        lists_to_delete.append(list_name)
+
+# Remove lists from session state
+for list_name in lists_to_delete:
+    del st.session_state.lists[list_name]
 
 # Generate recipes with filter options
 generate_button_clicked = st.button("Generate Recipes")
@@ -132,6 +160,14 @@ if generate_button_clicked:
                 with st.expander(f"Recipe {i+1}: {recipe['label']}"):
                     st.image(recipe['image'])
 
+                    # Display additional information
+                    st.subheader(" Information:")
+                    st.write(f"Calories: {recipe['calories']:.2f} kcal")
+                    st.write(f"Yield: {recipe['yield']}")
+                    st.write(f"Cuisine Type: {', '.join(recipe.get('cuisineType', []))}")
+                    st.write(f"Meal Type: {', '.join(recipe.get('mealType', []))}")
+                    st.write(f"Dish Type: {', '.join(recipe.get('dishType', []))}")
+
                     st.subheader("Ingredients:")
                     for ingredient in recipe['ingredientLines']:
                         st.write("- " + ingredient)
@@ -144,7 +180,10 @@ if generate_button_clicked:
                     st.subheader("Full Recipe:")
                     st.write(recipe['url'])
                     st.write("---")
-
+        else:
+            st.write("No recipes found with the selected ingredients and filters.")
+    else:
+        st.warning("Please select or add a list of ingredients.")
 
 
 
