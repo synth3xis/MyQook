@@ -4,10 +4,8 @@ import toml
 import os
 
 # Get absolute path to the directory where this script resides
-
 current_dir = os.path.dirname(os.path.abspath(__file__))
-secrets_path = os.path.join(current_dir, "secrets.toml")
-
+secrets_path = os.path.join(current_dir, ".streamlit/secrets.toml")
 
 # Load secrets from secrets.toml
 secrets = toml.load(secrets_path)
@@ -21,23 +19,24 @@ def filter_recipes(recipes, allergens=[], diet=[]):
     for recipe in recipes:
         include_recipe = True
         if allergens:
-            for allergen in allergens:
-                if allergen.lower() in [a.lower() for a in recipe.get('healthLabels', [])]:
-                    include_recipe = False
-                    break
+            if not any(allergen.lower() in [a.lower() for a in recipe.get('healthLabels', [])] for allergen in allergens):
+                include_recipe = False
         if diet:
-            for diet_type in diet:
-                if diet_type.lower() not in [d.lower() for d in recipe.get('dietLabels', [])]:
-                    include_recipe = False
-                    break
+            if not any(diet_type.lower() in [d.lower() for d in recipe.get('dietLabels', [])] for diet_type in diet):
+                include_recipe = False
         if include_recipe:
             filtered_recipes.append(recipe)
     return filtered_recipes
 
+# Function to map user-friendly options to Edamam API parameters
+def map_to_api_params(selected_options, mapping_dict):
+    return [mapping_dict[option] for option in selected_options if option in mapping_dict]
+
 # Function to get recipes from Edamam API
+@st.cache_data(ttl=600)  # Cache data for 10 minutes
 def get_recipes(ingredients, allergens=[], diet=[], count=10):
-    allergen_query = f"&health={','.join(allergens)}" if allergens else ""
-    diet_query = f"&diet={','.join(diet)}" if diet else ""
+    allergen_query = "".join([f"&health={a}" for a in allergens])
+    diet_query = "".join([f"&diet={d}" for d in diet])
     url = f"https://api.edamam.com/search?q={'+'.join(ingredients)}&app_id={app_id}&app_key={app_key}&to={count}{allergen_query}{diet_query}"
     response = requests.get(url)
     data = response.json()
@@ -58,57 +57,75 @@ def get_recipes(ingredients, allergens=[], diet=[], count=10):
 # Streamlit app layout
 st.title("MyQook")
 
+st.divider()
+
 # Sidebar for instructions
+st.sidebar.title("How to use")
 with st.sidebar.expander("How to Use"):
     st.markdown("""
-    
-    
-    1. **Add a list**: Type in the name of the list in the "Enter name for new list" text box, then click on the "Add New List" button.
+    1. **Add a new list**: To add a new list, simply type in the name of your list in the -new list- tab, click on generate and remember to select your list in the dropdown-menu on the sidebar
 
-    2. **Choose List**: After you created your list, choose your list in the dropdown menu.
+    2. **Add Ingredients**: After you selected your list, type in an ingredient, press enter and click on -add ingredient-, you can add multiple ingredients this way
 
-    3. **Add Ingredients**: you can add your Ingredients in the "Add ingredients" box. Click on "Add ingredient" to add an Ingredient to the list.
+    3. **Generate Recipes**: After adding your ingredients, click on the -Generate Recipes- button to generate recipes based on your ingredients on the selected list.
 
-    4. **Generate Recipes**: Click on "Generate recipe" to generate Recipes based on the ingredients on the selected List currently chosen.
+    4. **Filter Recipes**: Use the filters on the left sidebar to filter recipes based on allergens and diet types.
 
-    5. **Remove Lists or ingredients**: To remove a list or ingredient , click on the "Delete" button next to the list name in the "My Lists" section.
+    5. **View Recipes**: Expand the recipe card to view ingredients, preparation steps, and a link to the full recipe.
 
-    IMPORTANT: This App is still in development, some aspects (e.g filter options) might not function properly. 
-
-    supported language is **english only**
+    6. **Delete Lists**: To remove a list, click on the "Delete" button next to the list name in the "My Lists" section.
     """)
+
+st.sidebar.divider()
 
 # Initialize session state for lists
 if 'lists' not in st.session_state:
     st.session_state.lists = {}
 
+# Mapping dictionaries for allergens and diet filters
+allergen_mapping = {
+    "Gluten-Free": "gluten-free",
+    "Egg-Free": "egg-free",
+    "Soy-Free": "soy-free",
+    "Dairy-Free": "dairy-free",
+    "Seafood-Free": "seafood-free",
+    "Sesame-Free": "sesame-free",
+    "Tree-Nut-Free": "tree-nut-free",
+    "Wheat-Free": "wheat-free",
+}
+
+diet_mapping = {
+    "Balanced": "balanced",
+    "High-Protein": "high-protein",
+    "Low-Carb": "low-carb",
+    "Low-Fat": "low-fat",
+    "Paleo": "paleo",
+    "Vegan": "vegan",
+    "Vegetarian": "vegetarian"
+}
+
 # Sidebar for allergen filters
 st.sidebar.title("Allergen Filters")
-allergen_filter = st.sidebar.multiselect(
+selected_allergens = st.sidebar.multiselect(
     "Select allergens:",
-    [
-        "Dairy-Free",
-        "Egg-Free",
-        "Gluten-Free",
-        "Peanut-Free",
-        "Seafood-Free",
-        "Sesame-Free",
-        "Soy-Free",
-        "Sulfite-Free",
-        "Tree-Nut-Free",
-        "Wheat-Free",
-    ],
+    list(allergen_mapping.keys())
 )
 
 # Sidebar for diet filters
 st.sidebar.title("Diet Filters")
-diet_filter = st.sidebar.multiselect("Select diet types:", ["Balanced", "High-Protein", "Low-Carb", "Low-Fat", "Paleo", "Vegan", "Vegetarian"])
+selected_diets = st.sidebar.multiselect(
+    "Select diet types:",
+    list(diet_mapping.keys())
+)
 
 # Button to add a new list
 new_list_name = st.text_input("Enter name for new list:")
 if st.button("Add New List"):
     if new_list_name:
         st.session_state.lists[new_list_name] = []
+        
+st.sidebar.divider()
+st.sidebar.title("Select a list")
 
 # Multiselect widget to select or add lists
 selected_list_name = st.sidebar.selectbox("Select a list:", [""] + list(st.session_state.lists.keys()))
@@ -155,7 +172,9 @@ if generate_button_clicked:
 
     if selected_list_name in st.session_state.lists:
         ingredients_list = st.session_state.lists[selected_list_name]
-        recipes = get_recipes(ingredients_list, allergen_filter, diet_filter)
+        mapped_allergens = map_to_api_params(selected_allergens, allergen_mapping)
+        mapped_diets = map_to_api_params(selected_diets, diet_mapping)
+        recipes = get_recipes(ingredients_list, mapped_allergens, mapped_diets)
         if recipes:
             st.markdown("### Recipes")  # Add header for recipes
             for i, recipe in enumerate(recipes):
@@ -163,36 +182,34 @@ if generate_button_clicked:
                     st.image(recipe['image'])
 
                     # Display additional information
-                    st.subheader(" Information:")
+                    st.subheader("Additional Information:")
                     st.write(f"Calories: {recipe['calories']:.2f} kcal")
                     st.write(f"Yield: {recipe['yield']}")
                     st.write(f"Cuisine Type: {', '.join(recipe.get('cuisineType', []))}")
                     st.write(f"Meal Type: {', '.join(recipe.get('mealType', []))}")
                     st.write(f"Dish Type: {', '.join(recipe.get('dishType', []))}")
 
-                    st.subheader("Ingredients:")
-                    for ingredient in recipe['ingredientLines']:
-                        st.write("- " + ingredient)
+                    # Display allergens
+                    st.subheader("Allergens:")
+                    allergens = recipe.get('healthLabels', [])
+                    if allergens:
+                        st.write(", ".join(allergens))
+                    else:
+                        st.write("No allergens mentioned")
 
-                    if 'preparation' in recipe:
-                        st.subheader("Preparation Steps:")
-                        for i, step in enumerate(recipe['preparation']):
-                            st.write(f"{i + 1}. {step}")
+                    # Display preparation steps
+                    st.subheader("Preparation Steps:")
+                    for i, step in enumerate(recipe.get('preparation', [])):
+                        st.write(f"{i + 1}. {step}")
 
+                    # Display full recipe link
                     st.subheader("Full Recipe:")
                     st.write(recipe['url'])
                     st.write("---")
         else:
-            st.write("No recipes found with the selected ingredients and filters.")
+            st.warning("No recipes found with the selected ingredients and filters.")
     else:
         st.warning("Please select or add a list of ingredients.")
-
-
-
-
-
-
-
 
 
 
